@@ -1,12 +1,6 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
-# The calicoctl download URL.
-calicoctl_url = "https://github.com/projectcalico/calicoctl/releases/download/v3.2.0/calicoctl"
-
-# etcd version
-etcd_version = "3.3.9"
-
 # Size of the cluster created by Vagrant
 num_instances=2
 
@@ -48,27 +42,13 @@ Vagrant.configure(2) do |config|
 
       # The docker provisioner installs docker.
       host.vm.provision :docker, images: [
-          "busybox:latest"
+          "busybox:latest",
+          "gcr.io/google_containers/pause",
+          "quay.io/calico/node:release-v3.2"
       ]
 
-      # Calico uses etcd for calico and docker clustering. Install it on the first host only.
-      if i == 1
-        # Download etcd and start.
-        host.vm.provision :shell, inline: <<-SHELL
-          # sudo apt-get install -y unzip
-          curl -L --silent https://github.com/coreos/etcd/releases/download/v#{etcd_version}/etcd-v#{etcd_version}-linux-amd64.tar.gz -o etcd-v#{etcd_version}-linux-amd64.tar.gz
-          tar xzvf etcd-v#{etcd_version}-linux-amd64.tar.gz
-          nohup etcd-v#{etcd_version}-linux-amd64/etcd --advertise-client-urls=http://#{primary_ip}:2379 --listen-client-urls=http://#{primary_ip}:2379 > etcd.log &
-        SHELL
-      end
-
-      # download calicoctl.
-      host.vm.provision :shell, inline: "curl -L --silent #{calicoctl_url} -o /usr/local/bin/calicoctl"
-      host.vm.provision :shell, inline: "chmod +x /usr/local/bin/calicoctl"
-
-      # Ensure the vagrant and root users get the ETCD_ENDPOINTS environment.
-      host.vm.provision :shell, inline: %Q|echo 'export ETCD_ENDPOINTS="http://#{primary_ip}:2379"' >> /home/vagrant/.profile|
-      host.vm.provision :shell, inline: %Q|sudo sh -c 'echo "Defaults env_keep +=\"ETCD_ENDPOINTS\"" >>/etc/sudoers'|
+      # Setup the node
+      host.vm.provision :shell, :path => "bootstrap.sh", args: [ "#{i}", "#{primary_ip}"]
     end
   end
 end
